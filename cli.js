@@ -31,18 +31,27 @@ const cli = meow(`
 	Exits with code 0 when all names are available or 2 when any names are taken
 `);
 
-const {input} = cli;
+const {input, flags} = cli;
+const {registry} = flags;
 
 if (input.length === 0) {
 	console.error('Specify one or more package names');
 	process.exit(1);
 }
 
+function getLinkedName(styledName, pkg) {
+	if (!registry || registry.includes('npmjs.')) {
+		return pkg.isOrganization ?
+			terminalLink(styledName, `https://www.npmjs.com/org/${pkg.name.slice(1)}`) :
+			terminalLink(styledName, `https://www.npmjs.com/package/${pkg.name}`);
+	}
+
+	return terminalLink(styledName, `${registry}/${pkg.name}`);
+}
+
 function log(pkg) {
 	const styledName = chalk.bold(pkg.name);
-	const linkedName = pkg.isOrganization ?
-		terminalLink(styledName, `https://www.npmjs.com/org/${pkg.name.slice(1)}`) :
-		terminalLink(styledName, `https://www.npmjs.com/package/${pkg.name}`);
+	const linkedName = getLinkedName(styledName, pkg);
 
 	if (pkg.isAvailable) {
 		console.log(`${logSymbols.success} ${styledName} is available`);
@@ -56,7 +65,7 @@ function log(pkg) {
 const spinner = ora(`Checking ${input.length === 1 ? 'name' : 'names'} on npmjs.com…`).start();
 
 (async () => {
-	const result = await npmName.many(input);
+	const result = await npmName.many(input, {registryUrl: registry});
 
 	const packages = await Promise.all([...result].map(async ([name, isAvailable]) => {
 		const ret = {name, isAvailable, isOrganization: organizationRegex.test(name)};
